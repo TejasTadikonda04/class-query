@@ -9,29 +9,28 @@ Full RAG pipeline:
 
 from __future__ import annotations
 
+import os
 import json
 from pathlib import Path
 from typing import List, Tuple
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
-import openai
-import os
-
 import faiss
+from sentence_transformers import SentenceTransformer
+from dotenv import load_dotenv
+import openai
 
-import config  # local module
+import config
 
 
-# ---------------------------------------------------------------------------
-# Setup
-# ---------------------------------------------------------------------------
+# Load environment variables
+load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+if not openai.api_key:
+    raise RuntimeError("OPENAI_API_KEY not found. Please add it to a .env file.")
 
-# ---------------------------------------------------------------------------
-# Load index and metadata
-# ---------------------------------------------------------------------------
+
 def load_index_and_metadata() -> Tuple[faiss.IndexFlatL2, List[dict]]:
     index_path = Path(config.INDEX_PATH)
     meta_path = Path(config.META_PATH)
@@ -46,9 +45,6 @@ def load_index_and_metadata() -> Tuple[faiss.IndexFlatL2, List[dict]]:
     return index, metadata
 
 
-# ---------------------------------------------------------------------------
-# Query function
-# ---------------------------------------------------------------------------
 def query_documents(
     user_query: str,
     top_k: int = 5,
@@ -76,13 +72,10 @@ def query_documents(
     return results
 
 
-# ---------------------------------------------------------------------------
-# Prompt Construction
-# ---------------------------------------------------------------------------
 def build_prompt(chunks: List[dict], question: str) -> str:
     context = "\n\n".join(f"[{i+1}] {chunk['text']}" for i, chunk in enumerate(chunks))
     prompt = (
-        "You are a helpful assistant that answers questions using only the provided course content.\n\n"
+        "You are a helpful assistant. Use the following course content to answer the question.\n\n"
         f"Context:\n{context}\n\n"
         f"Question: {question}\n\n"
         "Answer:"
@@ -90,14 +83,11 @@ def build_prompt(chunks: List[dict], question: str) -> str:
     return prompt
 
 
-# ---------------------------------------------------------------------------
-# Generate answer using OpenAI
-# ---------------------------------------------------------------------------
 def generate_answer(prompt: str, model: str = "gpt-3.5-turbo") -> str:
     response = openai.ChatCompletion.create(
         model=model,
         messages=[
-            {"role": "system", "content": "You are a helpful assistant for understanding course syllabi."},
+            {"role": "system", "content": "You are a helpful assistant for answering course-related questions."},
             {"role": "user", "content": prompt},
         ],
         temperature=0.3,
@@ -106,30 +96,27 @@ def generate_answer(prompt: str, model: str = "gpt-3.5-turbo") -> str:
     return response["choices"][0]["message"]["content"].strip()
 
 
-# ---------------------------------------------------------------------------
-# Main interactive loop
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    print("\n🧠 ClassQuery RAG Assistant")
-    question = input("🔎 Enter your question: ").strip()
+    print("\nClassQuery RAG Assistant")
+    question = input("Enter your question: ").strip()
 
     if not question:
-        print("⚠️  No input provided.")
+        print("No input provided.")
         exit()
 
-    print("\n🔍 Retrieving context...")
+    print("\nRetrieving relevant content...")
     chunks = query_documents(question, top_k=5)
 
     if not chunks:
-        print("❌ No relevant chunks found.")
+        print("No relevant information found.")
         exit()
 
     prompt = build_prompt(chunks, question)
-    print("🧠 Generating answer using OpenAI...\n")
+    print("Generating answer using OpenAI...\n")
     answer = generate_answer(prompt)
 
-    print("✅ Answer:\n")
+    print("Answer:\n")
     print(answer)
-    print("\n📚 Sources:")
+    print("\nSources:")
     for i, chunk in enumerate(chunks, 1):
         print(f"[{i}] {chunk['source']} (chunk {chunk['chunk_id']})")
