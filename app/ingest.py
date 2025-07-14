@@ -19,7 +19,7 @@ All tunable settings live in `config.py`.
 
 Required packages
 -----------------
-pip install pdfplumber sentence-transformers faiss-cpu tqdm
+pip install pdfplumber sentence-transformers faiss-cpu tqdm hf_xet
 """
 
 from __future__ import annotations
