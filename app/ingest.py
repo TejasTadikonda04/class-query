@@ -169,8 +169,9 @@ def run_ingestion(upload_dir: Path | None = None) -> None:
     print(f"Ingesting {len(pdf_files)} PDF file(s)…")
     for pdf_path in tqdm(pdf_files, unit="pdf"):
         vectors, meta = ingest_pdf(pdf_path, model)
-        if not vectors:
-            continue  # empty PDFs skipped
+        if vectors is None or len(vectors) == 0:
+            continue
+
 
         index.add(vectors)
         # Adjust vector IDs when appending metadata
