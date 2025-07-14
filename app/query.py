@@ -1,8 +1,10 @@
 """
 query.py
 
-Interactive query interface for ClassQuery RAG system.
-Prompts user for a question via input() and returns relevant results.
+Full RAG pipeline:
+- Embed and retrieve top-k chunks
+- Format a prompt with context
+- Use OpenAI Chat API to generate a final answer
 """
 
 from __future__ import annotations
@@ -13,15 +15,23 @@ from typing import List, Tuple
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
+import openai
+import os
 
-try:
-    import faiss
-except ImportError:
-    import faiss_cpu as faiss
+import faiss
 
-import config  # local config
+import config  # local module
 
 
+# ---------------------------------------------------------------------------
+# Setup
+# ---------------------------------------------------------------------------
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+
+# ---------------------------------------------------------------------------
+# Load index and metadata
+# ---------------------------------------------------------------------------
 def load_index_and_metadata() -> Tuple[faiss.IndexFlatL2, List[dict]]:
     index_path = Path(config.INDEX_PATH)
     meta_path = Path(config.META_PATH)
@@ -36,6 +46,9 @@ def load_index_and_metadata() -> Tuple[faiss.IndexFlatL2, List[dict]]:
     return index, metadata
 
 
+# ---------------------------------------------------------------------------
+# Query function
+# ---------------------------------------------------------------------------
 def query_documents(
     user_query: str,
     top_k: int = 5,
@@ -63,18 +76,60 @@ def query_documents(
     return results
 
 
+# ---------------------------------------------------------------------------
+# Prompt Construction
+# ---------------------------------------------------------------------------
+def build_prompt(chunks: List[dict], question: str) -> str:
+    context = "\n\n".join(f"[{i+1}] {chunk['text']}" for i, chunk in enumerate(chunks))
+    prompt = (
+        "You are a helpful assistant that answers questions using only the provided course content.\n\n"
+        f"Context:\n{context}\n\n"
+        f"Question: {question}\n\n"
+        "Answer:"
+    )
+    return prompt
+
+
+# ---------------------------------------------------------------------------
+# Generate answer using OpenAI
+# ---------------------------------------------------------------------------
+def generate_answer(prompt: str, model: str = "gpt-3.5-turbo") -> str:
+    response = openai.ChatCompletion.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant for understanding course syllabi."},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.3,
+        max_tokens=300,
+    )
+    return response["choices"][0]["message"]["content"].strip()
+
+
+# ---------------------------------------------------------------------------
+# Main interactive loop
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    print("\n🧠 ClassQuery: Ask me about your syllabi\n")
+    print("\n🧠 ClassQuery RAG Assistant")
     question = input("🔎 Enter your question: ").strip()
 
     if not question:
         print("⚠️  No input provided.")
-    else:
-        results = query_documents(question, top_k=5)
-        if not results:
-            print("❌ No relevant results found.")
-        else:
-            print(f"\nTop {len(results)} results for: \"{question}\"\n")
-            for i, r in enumerate(results, 1):
-                print(f"[{i}] {r['source']} (chunk {r['chunk_id']}, score={r['score']:.4f})")
-                print(f"→ {r['text'][:300]}...\n")
+        exit()
+
+    print("\n🔍 Retrieving context...")
+    chunks = query_documents(question, top_k=5)
+
+    if not chunks:
+        print("❌ No relevant chunks found.")
+        exit()
+
+    prompt = build_prompt(chunks, question)
+    print("🧠 Generating answer using OpenAI...\n")
+    answer = generate_answer(prompt)
+
+    print("✅ Answer:\n")
+    print(answer)
+    print("\n📚 Sources:")
+    for i, chunk in enumerate(chunks, 1):
+        print(f"[{i}] {chunk['source']} (chunk {chunk['chunk_id']})")
