@@ -28,9 +28,7 @@ from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 from openai import OpenAI
 
-import config
-
-
+from app import config
 # Load environment variables
 load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")

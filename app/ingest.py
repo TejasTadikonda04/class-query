@@ -34,8 +34,7 @@ import pdfplumber
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
-import config  # local module in app/
-
+from app import config
 # --------------------------------------------------------------------------- #
 # Helper functions
 # --------------------------------------------------------------------------- #
